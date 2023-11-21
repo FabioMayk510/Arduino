@@ -1,178 +1,77 @@
-/*Pinos*/
+#include <Wire.h> // Biblioteca utilizada para fazer a comunicação com o I2C
+#include <LiquidCrystal_I2C.h> // Biblioteca utilizada para fazer a comunicação com o display 20x4 
+#include <SPI.h>
+#include <MFRC522.h>
 
-//Pinos para recebimento de dados dos sensores infravermelhos
-const int infra_1 = 0; //esquerda
-const int infra_2 = 2; //direita
+#define col 16 // Serve para definir o numero de colunas do display utilizado
+#define lin  2 // Serve para definir o numero de linhas do display utilizado
+#define ende  0x27 // Serve para definir o endereço do display.
+#define   SS_PIN    10
+#define   RST_PIN    9
 
-//Pino responsável por enviar o sinal para acender ou apagar o LED
-const int led = 10;
+const int pinoLed = 8;
+const int sensorEsquerdo = 2; //sensor esq
+const int sensorDireito = 3; //sensor dir
+ 
+//Definicoes pinos Arduino ligados a entrada da Ponte H
+int IN1 = 4;
+int IN2 = 5;
+int IN3 = 6;
+int IN4 = 7;
 
-//Pinos responsáveis por enviar e receber os sinais do sensor ultrassônico
-const int ECHO = 8;
-const int TRIG = 9;
+int TRIG = 2;
+int ECHO = 3;
 
-//Pinos responsáveis por controlar o motor_A - esquerdo
-int IN1 = 2 ;
-int IN2 = 4 ;
-int velocidadeA = 3;
+int distancia;
+char st[20];
+bool atv = false;
+bool acs = false;
+bool pisc = false;
 
-//Pinos responsáveis por controlar o motor_B - direito
-int IN3 = 6 ;
-int IN4 = 7 ;
-int velocidadeB = 5;
+MFRC522 mfrc522(SS_PIN, RST_PIN);   // Cria instância com MFRC522
+LiquidCrystal_I2C lcd(ende,col,lin); // Chamada da funcação LiquidCrystal para ser usada com o I2C
 
-//Pino responsável por enviar os sinais para o buzzer
-const int buzzer = 12;
+void rfid_func(); 
+void p();
+  
+void setup()
+{
+  //Define os pinos como saida
+ pinMode(IN1, OUTPUT);
+ pinMode(IN2, OUTPUT);
+ pinMode(IN3, OUTPUT);
+ pinMode(IN4, OUTPUT);
+
+ pinMode(sensorEsquerdo, INPUT);
+ pinMode(sensorDireito, INPUT);
+ Serial.begin(9600);
+
+ pinMode(TRIG,OUTPUT);
+ pinMode(ECHO,INPUT);
+
+ pinMode(pinoLed, OUTPUT);
+
+ SPI.begin();          // Inicia comunicação SPI bus
+ mfrc522.PCD_Init();   // Inicia MFRC522
+
+ lcd.init(); // Serve para iniciar a comunicação com o display já conectado
+ lcd.backlight(); // Serve para ligar a luz do display
+ lcd.clear(); // Serve para limpar a tela do display
 
 
-/*Variáveis*/
-
-//Variável que define as configurações de Distancia
-const int distancia_carro = 5;
-
-int distancia = 0;
-
-//Variáveis usadas para calcular a curva de som do buzzer
-float seno;
-int frequencia;
-
-//variavel encarregada de controlar a velocidade do motor
-int velocidade = 250;
-
-//variáveis usadas para controle dos sensores infravermelhos
-int s1 = 0;
-int s2 = 0;
-
-//Variáveis usadas para calcular a desaceleração dos motores individualmente
-int des1 = 0;
-int des2 = 0;
-
-/*Definição inicial do código, aqui é escrito tudo aquilo que será executado apenas UMA vez no início do algorítmo (antes de entrar em loop)*/
-
-void setup() {
-
-    pinMode(infra_1, INPUT);
-    pinMode(infra_2, INPUT);
-    Serial.begin(9600);
-
-    //Indica que os 4 pinos principais da Ponte H serão serão de saída de dados (a placa arduino enviará dados para esses pinos)
-    pinMode(IN1,OUTPUT);
-    pinMode(IN2,OUTPUT);
-    pinMode(IN3,OUTPUT);
-    pinMode(IN4,OUTPUT);
-
-    //Indica que os 2 pinos auxilares da Ponte H serão serão de saída de dados (a placa arduino enviará dados para esses pinos)
-    pinMode(velocidadeA,OUTPUT);
-    pinMode(velocidadeB,OUTPUT);
-
-    //Indica o pino do Sensor Ultrassônico que enviará o sinal sonoro (OUTPUT -> a placa arduino enviará dados para esse pino) 
-    //e o que receberá o mesmo sinal (INPUT -> a placa arduino receberá dados por esse pino) 
-    pinMode(TRIG,OUTPUT);
-    pinMode(ECHO,INPUT);
-
-    //Define o pino do LED como saída de dados
-    pinMode(led, OUTPUT);
-
-    //Define o pino do buzzer como saída de dados
-    pinMode(buzzer, OUTPUT);
-
-    //Faz o carrinho esperar 5 mil milissegundos (5 segundos) antes de começar a andar
-    delay(5000);
-
-    //Inicia o Motor A para frente (inverter para mudar a direção)
-    /*motor A*/
-
-    digitalWrite(IN1,LOW);
-    digitalWrite(IN2,HIGH);
-    
-    /*motor B*/
-
-    digitalWrite(IN3,HIGH);
-    digitalWrite(IN4,LOW);
+}
+  
+void loop()
+{
+  if(pisc == true){
+    digitalWrite(pinoLed, LOW);
+    delay(500);
+    digitalWrite(pinoLed, HIGH);
+  }
+  rfid_func();
+  p();
 }
 
-/* Loop do algorítmo, aqui será escrito aquilo que ficará em execução eternamente no microprocessador */
-
-void loop() {
-    retornaSensor();
-    vel();
-    run();
-}
-
-
-/*Funções*/
-
-void retornaSensor(){
-    s1 = analogRead(infra_1);
-    s2 = analogRead(infra_2);
-    Serial.print("sensor 1: ");
-    Serial.print(s1);
-    Serial.print("||");
-    Serial.print("sensor 2: ");
-    Serial.println(s2);
-
-    distancia = sensor_morcego(TRIG,ECHO);
-    Serial.print("distancia: ");
-    Serial.print(distancia);
-}
-
-void vel(){
-    des();
-    int opt = obj();
-    
-    switch(opt){
-        case 1:
-            noTone(buzzer);
-            velocidade = 250;
-            digitalWrite(led, LOW);
-            break;
-        case 2:
-            while(distancia <= distancia_carro){
-                analogWrite(velocidadeA, 0);
-                analogWrite(velocidadeB, 0);
-                distancia = sensor_morcego(TRIG,ECHO);
-                tocaBuzzer();
-                digitalWrite(led, HIGH);
-            }
-            break;
-        case 3:
-            //se eu nao conseguir fazer o carrinho se manter em linha, usar esta parte para criar um vetor e manter o historico de alterações nos sensores infra, pra saber se ja esteve na linha e poder voltar ou se nao esteve na linha e deve avançar ate ela
-        default:
-            Serial.print("Sensor Ultrasonico com erro");
-            break;
-    }
-}
-
-void run(){
-    analogWrite(velocidadeA, (velocidade - des1));
-    analogWrite(velocidadeB, (velocidade - des2));
-}
-
-void des(){
-    //desaceleração motor 2
-    if(s1 > 750)
-        des2 = (s1 - 750) / 2; //ESSE VALOR (2, 750)
-    else
-        des2 = 0;
-
-    //desaceleração motor 1
-    if(s2 > 750)
-        des1 = (s2 - 750) / 2;
-    else
-        des1 = 0;
-}
-
-int obj(){
-    if(distancia > distancia_carro)
-        return 1;
-    if (distancia <= distancia_carro)
-        return 2;
-    if (false)
-        return 3;
-}
-
-//Função responsável por retornar a distância entre o Sensor Ultrassônico e o objeto à sua frente, através do envio de uma onda sonora e recebimento da mesma
-//(caso colida com um objeto, a onda retornará), e assim calculando a proximidade à depender do tempo em que demora para a onda retornar
 int sensor_morcego(int pinotrig,int pinoecho){
     digitalWrite(pinotrig,LOW);
     delayMicroseconds(2);
@@ -180,14 +79,126 @@ int sensor_morcego(int pinotrig,int pinoecho){
     delayMicroseconds(10);
     digitalWrite(pinotrig,LOW);
     return pulseIn(pinoecho,HIGH)/58;
+} 
+
+void p(){
+  if(atv == true){
+    distancia = sensor_morcego(TRIG, ECHO);
+    Serial.print("distancia: ");
+    Serial.println(distancia);
+    if(distancia < 5){
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, HIGH);
+
+      lcd.setCursor(1,0);
+      lcd.print("LIXO ENCONTRADO");
+      lcd.setCursor(5 ,1); //Coloca o cursor do display na coluna 1 e linha 2
+      lcd.print("RETIRE");  // Comando de saida com a mensagem que deve aparecer na coluna 2 e linha 4
+    } else {
+      lcd.clear();
+      if(analogRead(sensorEsquerdo) < 150 && analogRead(sensorDireito) < 150){ 
+        // Serial.print("DIR/ESQ branco\n");
+        Serial.println(analogRead(sensorEsquerdo));
+        digitalWrite(IN1, LOW);
+        digitalWrite(IN2, HIGH);
+        digitalWrite(IN3, LOW);
+        digitalWrite(IN4, HIGH);
+      }else if(analogRead(sensorEsquerdo) < 150 && analogRead(sensorDireito) > 150){ 
+          Serial.print("DIR branco/ESQ preto\n");
+          digitalWrite(IN1, HIGH);
+          digitalWrite(IN2, HIGH);
+          digitalWrite(IN3, LOW);
+          digitalWrite(IN4, HIGH);
+      } else if(analogRead(sensorEsquerdo) > 150 && analogRead(sensorDireito) < 150){
+          Serial.print("DIR preto/ESQ branco\n");
+          digitalWrite(IN1, LOW);
+          digitalWrite(IN2, HIGH);
+          digitalWrite(IN3, HIGH);
+          digitalWrite(IN4, HIGH);
+      } else {
+        Serial.print("DIR/ESQ preto\n");
+        digitalWrite(IN1, HIGH);
+        digitalWrite(IN2, LOW);
+        digitalWrite(IN3, HIGH);
+        digitalWrite(IN4, LOW);
+      }
+    }
+  } else {
+      digitalWrite(IN1, HIGH);
+      digitalWrite(IN2, HIGH);
+      digitalWrite(IN3, HIGH);
+      digitalWrite(IN4, HIGH);
+  }  
 }
 
-//Função responsável por enviar a curva sonora para o buzzer, assim podendo reproduzir sons não lineares
-void tocaBuzzer(){
-    for(int x=0;x<180;x++){
-        seno=(sin(x*3.1416/180));
-        frequencia = 2000+(int(seno*1000));
-        tone(buzzer,frequencia);
-        delay(2);
-    }
+void rfid_func()                            //Função para identificação das tags RFID
+{
+      // -- verifica novas tags --
+      if ( ! mfrc522.PICC_IsNewCardPresent()) 
+      {
+        return;
+      }
+      // seleciona um dos cartões
+      if ( ! mfrc522.PICC_ReadCardSerial()) 
+      {
+        return;
+      }
+      
+      // mostra UID na serial
+      Serial.print("UID da tag :");
+      String conteudo= "";
+      byte letra;
+      for (byte i = 0; i < mfrc522.uid.size; i++) 
+      {
+         Serial.print(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " ");
+         Serial.print(mfrc522.uid.uidByte[i], HEX);
+         conteudo.concat(String(mfrc522.uid.uidByte[i] < 0x10 ? " 0" : " "));
+         conteudo.concat(String(mfrc522.uid.uidByte[i], HEX));
+      }
+      Serial.println();
+      Serial.print("Mensagem : ");
+      conteudo.toUpperCase();
+
+
+
+      if (conteudo.substring(1) == "4D 51 D2 CF") 
+      {
+ 	lcd.clear();
+        atv = !atv;
+        if(atv == true){
+          lcd.print("Ligando...");
+        } else {
+          lcd.print("Desligando...");
+        }
+        delay(5000);
+      }
+     
+      if (conteudo.substring(1) == "63 E0 8B 95") 
+      {
+	lcd.clear();
+        lcd.print("ACESO");
+        pisc = false;
+        acs = !acs;
+        if(acs == false){
+          digitalWrite(pinoLed, HIGH);
+        } else {
+          digitalWrite(pinoLed, LOW);
+        }
+        delay(800);
+      }
+
+	if (conteudo.substring(1) == "17 95 85 A7") 
+      {
+        lcd.clear();
+	lcd.print("PISCANDO!");
+        acs = false;
+        pisc = !pisc;
+        delay(800);
+        
+      }
+  lcd.clear();
+  
 }
+
