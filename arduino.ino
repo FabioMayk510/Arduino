@@ -10,7 +10,7 @@
 #define   RST_PIN    9
 
 const int pinoLed = 8;
-const int sensorEsquerdo = 2; //sensor esq
+const int sensorEsquerdo = 0; //sensor esq
 const int sensorDireito = 3; //sensor dir
  
 //Definicoes pinos Arduino ligados a entrada da Ponte H
@@ -63,6 +63,9 @@ void setup()
   
 void loop()
 {
+  // Serial.print(digitalRead(sensorEsquerdo));
+  // Serial.print(" / ");
+  // Serial.println(analogRead(sensorDireito));
   if(pisc == true){
     digitalWrite(pinoLed, LOW);
     delay(500);
@@ -82,10 +85,13 @@ int sensor_morcego(int pinotrig,int pinoecho){
 } 
 
 void p(){
+  Serial.print(digitalRead(sensorEsquerdo));
+  Serial.print(" / ");
+  Serial.println(analogRead(sensorDireito));
   if(atv == true){
     distancia = sensor_morcego(TRIG, ECHO);
-    Serial.print("distancia: ");
-    Serial.println(distancia);
+    // Serial.print("distancia: ");
+    // Serial.println(distancia);
     if(distancia < 5){
       digitalWrite(IN1, HIGH);
       digitalWrite(IN2, HIGH);
@@ -98,25 +104,24 @@ void p(){
       lcd.print("RETIRE");  // Comando de saida com a mensagem que deve aparecer na coluna 2 e linha 4
     } else {
       lcd.clear();
-      if(analogRead(sensorEsquerdo) < 150 && analogRead(sensorDireito) < 150){ 
-        // Serial.print("DIR/ESQ branco\n");
-        Serial.println(analogRead(sensorEsquerdo));
+      if(digitalRead(sensorEsquerdo) == 0 && analogRead(sensorDireito) < 200){ 
+        Serial.print("DIR/ESQ branco\n");
         digitalWrite(IN1, LOW);
         digitalWrite(IN2, HIGH);
         digitalWrite(IN3, LOW);
         digitalWrite(IN4, HIGH);
-      }else if(analogRead(sensorEsquerdo) < 150 && analogRead(sensorDireito) > 150){ 
-          Serial.print("DIR branco/ESQ preto\n");
-          digitalWrite(IN1, HIGH);
-          digitalWrite(IN2, HIGH);
-          digitalWrite(IN3, LOW);
-          digitalWrite(IN4, HIGH);
-      } else if(analogRead(sensorEsquerdo) > 150 && analogRead(sensorDireito) < 150){
-          Serial.print("DIR preto/ESQ branco\n");
+      }else if(digitalRead(sensorEsquerdo) == 0 && analogRead(sensorDireito) > 400){ 
+          Serial.print("ESQ branco/DIR preto\n");
           digitalWrite(IN1, LOW);
           digitalWrite(IN2, HIGH);
           digitalWrite(IN3, HIGH);
           digitalWrite(IN4, HIGH);
+      } else if(digitalRead(sensorEsquerdo) ==  1 && analogRead(sensorDireito) < 200){
+          Serial.print("ESQ preto/DIR branco\n");
+          digitalWrite(IN1, HIGH);
+          digitalWrite(IN2, HIGH);
+          digitalWrite(IN3, HIGH);
+          digitalWrite(IN4, LOW);
       } else {
         Serial.print("DIR/ESQ preto\n");
         digitalWrite(IN1, HIGH);
@@ -126,10 +131,11 @@ void p(){
       }
     }
   } else {
+      
       digitalWrite(IN1, HIGH);
-      digitalWrite(IN2, HIGH);
-      digitalWrite(IN3, HIGH);
-      digitalWrite(IN4, HIGH);
+        digitalWrite(IN2, HIGH);
+        digitalWrite(IN3, HIGH);
+        digitalWrite(IN4, HIGH);
   }  
 }
 
